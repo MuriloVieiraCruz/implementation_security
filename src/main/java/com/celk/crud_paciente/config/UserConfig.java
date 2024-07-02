@@ -1,4 +1,4 @@
-package com.celk.crud_paciente.config.security;
+package com.celk.crud_paciente.config;
 
 import com.celk.crud_paciente.adapter.out.InsertUserAdapter;
 import com.celk.crud_paciente.application.core.usecase.InsertUserUseCase;

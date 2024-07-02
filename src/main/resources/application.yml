@@ -1,8 +1,12 @@
 jwt:
-  public:
-    key: classpath:app.pub
-  private:
-    key: classpath:app.key
+  access:
+    key:
+      public: classpath:app.pub
+      private: classpath:app.key
+  refresh:
+    key:
+      public: classpath:app_refresh.pub
+      private: classpath:app_refresh.key
 
 server:
   port: 8081

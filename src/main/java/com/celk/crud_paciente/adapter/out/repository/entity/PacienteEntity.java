@@ -31,7 +31,6 @@ public class PacienteEntity {
     @NotNull(message = "A data de nascimento deve ser informada")
     private LocalDate dataNascimento;
 
-    @CPF(message = "CPF inválido")
     @NotNull(message = "O CPF deve ser informado")
     private String cpf;
 

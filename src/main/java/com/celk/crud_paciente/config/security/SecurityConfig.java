@@ -3,9 +3,11 @@ package com.celk.crud_paciente.config.security;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
@@ -21,7 +23,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
+import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.security.interfaces.RSAPrivateKey;
@@ -31,11 +36,17 @@ import java.security.interfaces.RSAPublicKey;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${jwt.public.key}")
-    private RSAPublicKey publicKey;
+    @Value("${jwt.access.key.public}")
+    private RSAPublicKey publicAccessKey;
 
-    @Value("${jwt.private.key}")
-    private RSAPrivateKey privateKey;
+    @Value("${jwt.access.key.private}")
+    private RSAPrivateKey privateAccessKey;
+
+    @Value("${jwt.refresh.key.public}")
+    private RSAPublicKey publicRefreshKey;
+
+    @Value("${jwt.refresh.key.private}")
+    private RSAPrivateKey privateRefreshKey;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
@@ -48,10 +59,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/user").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/token").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/paciente").hasRole("ADMIN")
                     .anyRequest().authenticated())
                 .csrf(AbstractHttpConfigurer::disable)
-                .oauth2ResourceServer(conf  -> conf.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+                .oauth2ResourceServer(conf -> conf.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(new BearerTokenAuthenticationEntryPoint())
+                        .accessDeniedHandler(new BearerTokenAccessDeniedHandler()));
 
         return http.build();
     }
@@ -68,15 +84,38 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtEncoder jwtEncoder() {
-        var jwk = new RSAKey.Builder(publicKey).privateKey(privateKey).build();
+    @Primary
+    public JwtEncoder jwtAccessEncoder() {
+        var jwk = new RSAKey.Builder(publicAccessKey).privateKey(privateAccessKey).build();
+        return new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(jwk)));
+    }
+
+    @Bean
+    @Primary
+    public JwtDecoder jwtAccessDecoder() {
+        return NimbusJwtDecoder.withPublicKey(publicAccessKey).build();
+    }
+
+    @Bean
+    @Qualifier("jwtRefreshEncoder")
+    public JwtEncoder jwtRefreshEncoder() {
+        var jwk = new RSAKey.Builder(publicRefreshKey).privateKey(privateRefreshKey).build();
         var jwks = new ImmutableJWKSet<>(new JWKSet(jwk));
         return new NimbusJwtEncoder(jwks);
     }
 
     @Bean
-    public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withPublicKey(publicKey).build();
+    @Qualifier("jwtRefreshDecoder")
+    public JwtDecoder jwtRefreshDecoder() {
+        return NimbusJwtDecoder.withPublicKey(publicRefreshKey).build();
+    }
+
+    @Bean
+    @Qualifier("jwtRefreshTokenAuthenticationProvider")
+    JwtAuthenticationProvider jwtRefreshTokenAuthenticationProvider() {
+        JwtAuthenticationProvider provider = new JwtAuthenticationProvider(jwtRefreshDecoder());
+        provider.setJwtAuthenticationConverter(jwtAuthenticationConverter());
+        return provider;
     }
 
     @Bean
